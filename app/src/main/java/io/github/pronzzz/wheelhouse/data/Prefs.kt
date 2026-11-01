@@ -21,16 +21,35 @@ class Prefs(context: Context) {
 
     // Wheel
     var clickSound: Boolean by BoolPref("click_sound", true)
-    var haptics: Boolean by BoolPref("haptics", true)
+    /** 0 off, 1 light, 2 medium, 3 strong. Older builds stored an on/off "haptics" flag. */
+    var hapticLevel: Int
+        get() = sp.getInt("haptic_level", if (sp.getBoolean("haptics", true)) 2 else 0)
+        set(v) = sp.edit().putInt("haptic_level", v).apply()
     var wheelSensitivity: Int by IntPref("wheel_sensitivity", 1) // 0 low, 1 medium, 2 high
 
     // Appliance behaviour
     var immersive: Boolean by BoolPref("immersive", true)
-    var awakeWhileCharging: Boolean by BoolPref("awake_charging", true)
+    /** Keep the screen on at full brightness: 0 never, 1 while charging, 2 always. */
+    var keepAwake: Int
+        get() = sp.getInt("keep_awake", if (sp.getBoolean("awake_charging", true)) 1 else 0)
+        set(v) = sp.edit().putInt("keep_awake", v).apply()
+    /** Always-on display: the screen never sleeps and dims to a clock face when idle. */
+    var alwaysOn: Boolean by BoolPref("always_on", false)
     var autoNowPlaying: Boolean by BoolPref("auto_now_playing", true)
     var showApps: Boolean by BoolPref("show_apps", true)
     var liteMode: Boolean by BoolPref("lite_mode", lowRamDevice)
     var homePromptShown: Boolean by BoolPref("home_prompt_shown", false)
+
+    // Album artwork from the internet
+    var fetchArtwork: Boolean by BoolPref("fetch_artwork", true)
+    var artworkWifiOnly: Boolean by BoolPref("artwork_wifi_only", true)
+
+    // Spool: downloads through a computer on the same Wi-Fi
+    var spoolHost: String by StringPref("spool_host", "")
+    var spoolPort: Int by IntPref("spool_port", 7317)
+    var spoolCode: String by StringPref("spool_code", "")
+    var spoolName: String by StringPref("spool_name", "")
+    var spoolFormat: String by StringPref("spool_format", "m4a") // m4a or mp3
 
     // Playback
     var shuffle: Boolean by BoolPref("shuffle", false)
@@ -42,7 +61,8 @@ class Prefs(context: Context) {
     var queuePosition: Long by LongPref("queue_position", 0L)
 
     fun resetAppearanceAndBehaviour() {
-        val keep = setOf("queue_ids", "queue_index", "queue_position", "home_prompt_shown")
+        val keep = setOf("queue_ids", "queue_index", "queue_position", "home_prompt_shown",
+            "spool_host", "spool_port", "spool_code", "spool_name")
         val e = sp.edit()
         sp.all.keys.filterNot { it in keep }.forEach { e.remove(it) }
         e.apply()

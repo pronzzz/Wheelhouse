@@ -18,6 +18,8 @@ interface Ui {
     fun showNowPlaying()
     fun flash(message: String)
     fun settingsChanged()
+    /** Plays one haptic pulse at the current level. Returns false if the phone has no vibrator. */
+    fun previewHaptics(): Boolean
     fun refreshTitle()
 }
 

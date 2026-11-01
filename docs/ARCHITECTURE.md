@@ -12,19 +12,28 @@ app/src/main/java/io/github/pronzzz/wheelhouse/
 │   ├── MediaScanner.kt       Reads songs from MediaStore; can index hand-copied files
 │   ├── Library.kt            In-memory index (songs/albums/artists/genres), stats, playlists
 │   ├── ArtworkLoader.kt      Memory-capped, off-main-thread album art
+│   ├── ArtworkFetcher.kt     Online cover lookup (Deezer, then iTunes) and on-disk cover cache
+│   ├── ArtMatch.kt           Picks the right cover from search results (pure, unit tested)
+│   ├── NetworkMonitor.kt     Online / Wi-Fi / metered state as a StateFlow
 │   └── db/                   Room: cached tracks, play stats, playlists
 ├── playback/
 │   ├── PlaybackService.kt    Media3 MediaSessionService + ExoPlayer
 │   ├── PlayerConnection.kt   App-side controller: queue, shuffle/repeat, persistence
 │   └── SleepTimer.kt
+├── spool/
+│   ├── SpoolClient.kt        HTTP client for Spool's LAN API on the user's computer
+│   ├── SpoolDiscovery.kt     Finds `spool --lan` engines with a UDP broadcast
+│   ├── SpoolDownloads.kt     Download queue: create jobs, follow progress, collect files
+│   ├── MusicSaver.kt         Writes finished songs into Music/Spool via MediaStore
+│   └── SpoolLinks.kt         YouTube link and address parsing (unit tested)
 ├── launcher/
 │   ├── HomeRole.kt           Becoming / leaving the default home app
 │   └── AppsRepository.kt     Lists and opens other apps (Extras › Apps)
 ├── ui/
 │   ├── MainActivity.kt       The HOME + LAUNCHER activity; routes wheel input
-│   ├── device/               Case, click wheel, wheel maths, click sound, colour skins
+│   ├── device/               Case, click wheel, wheel maths, click sound, haptics, colour skins, always-on clock
 │   ├── screen/               Screen base class, screen stack, status bar, list widget
-│   └── screens/              Main menu, Now Playing, Cover Flow, Extras, all menus
+│   └── screens/              Main menu, Now Playing, Cover Flow, Extras, Spool, all menus
 └── util/Text.kt              Sorting keys, durations, tag clean-up
 ```
 

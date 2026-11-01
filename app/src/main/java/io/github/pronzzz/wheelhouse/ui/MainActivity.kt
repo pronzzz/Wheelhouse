@@ -16,12 +16,16 @@ import android.os.Looper
 import android.os.SystemClock
 import android.view.KeyEvent
 import android.view.WindowManager
+import android.widget.FrameLayout
 import androidx.core.view.ViewCompat
 import androidx.core.view.WindowCompat
 import androidx.core.view.WindowInsetsCompat
 import androidx.core.view.WindowInsetsControllerCompat
 import io.github.pronzzz.wheelhouse.WheelhouseApp
 import io.github.pronzzz.wheelhouse.launcher.HomeRole
+import io.github.pronzzz.wheelhouse.spool.SpoolLinks
+import io.github.pronzzz.wheelhouse.ui.screens.SpoolMenus
+import io.github.pronzzz.wheelhouse.ui.device.AlwaysOnView
 import io.github.pronzzz.wheelhouse.ui.device.ClickWheelView
 import io.github.pronzzz.wheelhouse.ui.device.DeviceLayout
 import io.github.pronzzz.wheelhouse.ui.device.Feedback
@@ -57,6 +61,8 @@ class MainActivity : Activity(), Ui, WheelListener {
     private lateinit var host: ScreenHost
     private lateinit var wheel: ClickWheelView
     private lateinit var feedback: Feedback
+    private lateinit var aod: AlwaysOnView
+    private var aodActive = false
     private val scope = MainScope()
     private val handler = Handler(Looper.getMainLooper())
     private var lastInput = SystemClock.uptimeMillis()
@@ -74,7 +80,11 @@ class MainActivity : Activity(), Ui, WheelListener {
         host = ScreenHost(this)
         wheel = ClickWheelView(this, feedback).also { it.listener = this }
         device = DeviceLayout(this, host, wheel)
-        setContentView(device)
+        aod = AlwaysOnView(this) { exitAlwaysOn() }.also { it.visibility = android.view.View.GONE }
+        setContentView(FrameLayout(this).apply {
+            addView(device)
+            addView(aod)
+        })
         volumeControlStream = AudioManager.STREAM_MUSIC
 
         WindowCompat.setDecorFitsSystemWindows(window, false)
@@ -89,6 +99,7 @@ class MainActivity : Activity(), Ui, WheelListener {
         val granted = hasAudioPermission()
         app.library.start(granted)
         if (granted) showStart() else showWelcome(permanentlyDenied = false)
+        handleShare(intent)
 
         scope.launch {
             app.player.state.collect { st ->
@@ -99,7 +110,12 @@ class MainActivity : Activity(), Ui, WheelListener {
                 }
                 host.statusBar.sleeping = app.player.sleepTimer.active
                 host.screens.forEach { it.onPlayerChanged() }
+                aod.playing = st.isPlaying || st.playWhenReady
+                aod.nowPlaying = app.player.currentTrack()?.takeIf { st.hasQueue }?.let { "${it.title} — ${it.artist}" }
             }
+        }
+        scope.launch {
+            app.network.state.collect { net -> host.statusBar.wifi = net.online && net.wifi }
         }
         scope.launch {
             app.library.version.collect { host.screens.forEach { it.onLibraryChanged() } }
@@ -116,6 +132,9 @@ class MainActivity : Activity(), Ui, WheelListener {
     override fun onResume() {
         super.onResume()
         resumed = true
+        app.network.refresh()
+        // Turning the screen back on with the power button should show the player, not the dim clock.
+        if (aodActive) exitAlwaysOn()
         applyImmersive()
         // Came back from system settings after granting access?
         if (onboarding && hasAudioPermission()) {
@@ -152,6 +171,17 @@ class MainActivity : Activity(), Ui, WheelListener {
     override fun onNewIntent(intent: Intent) {
         super.onNewIntent(intent)
         if (resumed && intent.hasCategory(Intent.CATEGORY_HOME) && !onboarding) host.popToRoot()
+        handleShare(intent)
+    }
+
+    /** A YouTube link shared from another app opens in Spool, ready to download. */
+    private fun handleShare(intent: Intent?) {
+        if (intent?.action != Intent.ACTION_SEND || onboarding) return
+        val url = SpoolLinks.extract(intent.getStringExtra(Intent.EXTRA_TEXT))
+        intent.action = null // handled; don't reopen it if Android recreates the activity
+        if (aodActive) exitAlwaysOn()
+        markInput()
+        if (url == null) flash("No YouTube Link Found") else host.push(SpoolMenus.link(this, url))
     }
 
     @Deprecated("Deprecated in Java")
@@ -226,6 +256,7 @@ class MainActivity : Activity(), Ui, WheelListener {
     }
 
     private fun applyImmersive() {
+        if (aodActive) return
         val c = WindowCompat.getInsetsController(window, window.decorView)
         val darkChrome = Skins.byId(app.prefs.skin).darkChrome
         c.isAppearanceLightStatusBars = !darkChrome
@@ -239,8 +270,34 @@ class MainActivity : Activity(), Ui, WheelListener {
     }
 
     private fun applyKeepAwake() {
-        if (app.prefs.awakeWhileCharging && charging) window.addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
+        val prefs = app.prefs
+        val on = prefs.alwaysOn || prefs.keepAwake == 2 || (prefs.keepAwake == 1 && charging)
+        if (on) window.addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
         else window.clearFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
+        if (!prefs.alwaysOn && aodActive) exitAlwaysOn()
+    }
+
+    // ---- Always-on display --------------------------------------------------------------------
+
+    private fun enterAlwaysOn() {
+        if (aodActive) return
+        aodActive = true
+        aod.visibility = android.view.View.VISIBLE
+        aod.start()
+        window.attributes = window.attributes.apply { screenBrightness = AOD_BRIGHTNESS }
+        WindowCompat.getInsetsController(window, window.decorView).apply {
+            systemBarsBehavior = WindowInsetsControllerCompat.BEHAVIOR_SHOW_TRANSIENT_BARS_BY_SWIPE
+            hide(WindowInsetsCompat.Type.systemBars())
+        }
+    }
+
+    private fun exitAlwaysOn() {
+        if (!aodActive) return
+        aodActive = false
+        aod.stop()
+        aod.visibility = android.view.View.GONE
+        markInput()
+        applySettings()
     }
 
     private val batteryReceiver = object : BroadcastReceiver() {
@@ -254,6 +311,8 @@ class MainActivity : Activity(), Ui, WheelListener {
         charging = status == BatteryManager.BATTERY_STATUS_CHARGING || status == BatteryManager.BATTERY_STATUS_FULL
         if (level >= 0 && scale > 0) host.statusBar.battery = level * 100 / scale
         host.statusBar.charging = charging
+        aod.battery = host.statusBar.battery
+        aod.charging = charging
         applyKeepAwake()
     }
 
@@ -266,6 +325,11 @@ class MainActivity : Activity(), Ui, WheelListener {
     override fun flash(message: String) = host.flash(message)
 
     override fun settingsChanged() = applySettings()
+
+    override fun previewHaptics(): Boolean {
+        feedback.preview()
+        return feedback.hasVibrator
+    }
 
     override fun showNowPlaying() {
         if (host.top?.isNowPlaying == true) return
@@ -337,6 +401,10 @@ class MainActivity : Activity(), Ui, WheelListener {
         override fun run() {
             val top = host.top
             val st = app.player.state.value
+            val idle = SystemClock.uptimeMillis() - lastInput
+            if (app.prefs.alwaysOn && !aodActive && !onboarding && resumed && idle > AOD_IDLE_MS) {
+                enterAlwaysOn()
+            }
             if (app.prefs.autoNowPlaying && st.isPlaying && top != null && !top.isNowPlaying &&
                 top.allowsIdleNowPlaying && top !is TextEntryScreen && !onboarding &&
                 SystemClock.uptimeMillis() - lastInput > IDLE_MS
@@ -347,9 +415,20 @@ class MainActivity : Activity(), Ui, WheelListener {
         }
     }
 
+    /** Touches on the screen itself (not just the wheel) count as activity too. */
+    override fun dispatchTouchEvent(ev: android.view.MotionEvent): Boolean {
+        if (ev.actionMasked == android.view.MotionEvent.ACTION_DOWN) markInput()
+        return super.dispatchTouchEvent(ev)
+    }
+
     // ---- Keyboards, D-pads, TV remotes --------------------------------------------------------
 
     override fun dispatchKeyEvent(event: KeyEvent): Boolean {
+        if (aodActive && !isVolumeKey(event.keyCode)) {
+            // Any key just wakes the always-on display; it does not also act.
+            if (event.action == KeyEvent.ACTION_DOWN && event.repeatCount == 0) exitAlwaysOn()
+            return true
+        }
         if (event.action != KeyEvent.ACTION_DOWN) return super.dispatchKeyEvent(event)
         val handled = when (event.keyCode) {
             KeyEvent.KEYCODE_DPAD_UP, KeyEvent.KEYCODE_DPAD_LEFT, KeyEvent.KEYCODE_PAGE_UP -> { onWheelRotate(-1); true }
@@ -365,6 +444,9 @@ class MainActivity : Activity(), Ui, WheelListener {
         return handled || super.dispatchKeyEvent(event)
     }
 
+    private fun isVolumeKey(code: Int) =
+        code == KeyEvent.KEYCODE_VOLUME_UP || code == KeyEvent.KEYCODE_VOLUME_DOWN || code == KeyEvent.KEYCODE_VOLUME_MUTE
+
     @Deprecated("Deprecated in Java")
     override fun onActivityResult(requestCode: Int, resultCode: Int, data: Intent?) {
         @Suppress("DEPRECATION")
@@ -378,5 +460,8 @@ class MainActivity : Activity(), Ui, WheelListener {
     companion object {
         private const val REQ_AUDIO = 10
         private const val IDLE_MS = 30_000L
+        /** Idle time before the always-on display dims to its clock face. */
+        private const val AOD_IDLE_MS = 60_000L
+        private const val AOD_BRIGHTNESS = 0.04f
     }
 }

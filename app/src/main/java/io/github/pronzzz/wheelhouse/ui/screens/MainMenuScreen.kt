@@ -40,6 +40,7 @@ class MainMenuScreen(ui: Ui) : Screen(ui) {
         fun add(row: Row, preview: Preview) { rows += row; p += preview }
         add(Row("Music", chevron = true, onSelect = { ui.push(Menus.music(ui)) }), Preview.ART)
         add(Row("Cover Flow", chevron = true, onSelect = { ui.push(CoverFlowScreen(ui)) }), Preview.ART)
+        add(Row("Spool", chevron = true, onSelect = { ui.push(SpoolMenus.root(ui)) }), Preview.ART)
         add(Row("Extras", chevron = true, onSelect = { ui.push(Menus.extras(ui)) }), Preview.CLOCK)
         add(Row("Settings", chevron = true, onSelect = { ui.push(Menus.settings(ui)) }), Preview.INFO)
         add(Row("Shuffle Songs", onSelect = {

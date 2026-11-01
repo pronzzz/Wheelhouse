@@ -176,10 +176,15 @@ class TextEntryScreen(
     override val title: String,
     initial: String,
     private val hint: (String) -> String,
+    /** The characters on the wheel strip. SPACE, DEL and OK are added automatically. */
+    alphabet: String = LETTERS,
+    /** Keep letters in capitals (pairing codes) instead of sentence-style lower case. */
+    private val upperCase: Boolean = false,
+    private val maxLength: Int = 40,
     private val onDone: (String) -> Unit,
 ) : Screen(ui) {
 
-    private val chars: List<String> = ("ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789".map { it.toString() }) + listOf(SPACE, DEL, DONE)
+    private val chars: List<String> = alphabet.map { it.toString() } + listOfNotNull(SPACE.takeIf { alphabet == LETTERS }, DEL, DONE)
     private var text = initial
     private var index = 0
     private lateinit var v: EntryView
@@ -199,7 +204,7 @@ class TextEntryScreen(
             DEL -> text = text.dropLast(1)
             SPACE -> if (text.isNotEmpty() && !text.endsWith(" ")) text += " "
             DONE -> { onDone(text.trim()); return }
-            else -> if (text.length < 40) text += if (text.isEmpty() || text.endsWith(" ")) ch else ch.lowercase()
+            else -> if (text.length < maxLength) text += if (upperCase || text.isEmpty() || text.endsWith(" ")) ch else ch.lowercase()
         }
         v.invalidate()
     }
@@ -270,6 +275,7 @@ class TextEntryScreen(
     }
 
     companion object {
+        const val LETTERS = "ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789"
         const val SPACE = "␣"
         const val DEL = "⌫"
         const val DONE = "OK"
