@@ -13,7 +13,7 @@ import android.text.TextPaint
 import android.view.View
 import io.github.pronzzz.wheelhouse.ui.device.Palette
 
-/** The bar at the top of the screen: play state, title, battery. */
+/** The bar at the top of the screen: play state, title, Wi-Fi, battery. */
 class StatusBarView(context: Context) : View(context) {
 
     var palette: Palette = Palette.LIGHT
@@ -27,6 +27,9 @@ class StatusBarView(context: Context) : View(context) {
     var battery = -1
         set(v) { if (field != v) { field = v; invalidate() } }
     var charging = false
+        set(v) { if (field != v) { field = v; invalidate() } }
+    /** Shown only while connected to Wi-Fi that actually reaches the internet. */
+    var wifi = false
         set(v) { if (field != v) { field = v; invalidate() } }
 
     private val dp = resources.displayMetrics.density
@@ -116,10 +119,28 @@ class StatusBarView(context: Context) : View(context) {
             }
         }
 
+        // Wi-Fi, left of the battery
+        val wifiW = if (wifi) h * 0.85f else 0f
+        if (wifi) drawWifi(canvas, right - bw - h * 0.5f, cy + h * 0.2f, h, ink)
+
         // Centre: title
-        val maxW = w - 2 * (bw + h * 0.9f)
+        val maxW = w - 2 * (bw + h * 0.9f + wifiW)
         val t = TextUtils.ellipsize(title, text, maxW, TextUtils.TruncateAt.END).toString()
         val tw = text.measureText(t)
         canvas.drawText(t, (w - tw) / 2, cy - (text.ascent() + text.descent()) / 2, text)
+    }
+
+    /** Three arcs and a dot fanning up from (x, baseY), like the classic Wi-Fi symbol. */
+    private fun drawWifi(canvas: Canvas, x: Float, baseY: Float, h: Float, ink: Int) {
+        stroke.color = ink
+        stroke.strokeWidth = h * 0.075f
+        stroke.strokeCap = Paint.Cap.ROUND
+        for (r in floatArrayOf(h * 0.15f, h * 0.26f, h * 0.37f)) {
+            rect.set(x - r, baseY - r, x + r, baseY + r)
+            canvas.drawArc(rect, -135f, 90f, false, stroke)
+        }
+        stroke.strokeCap = Paint.Cap.BUTT
+        icon.color = ink
+        canvas.drawCircle(x, baseY - h * 0.02f, h * 0.05f, icon)
     }
 }

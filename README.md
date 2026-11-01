@@ -25,12 +25,15 @@ That phone in your drawer still has a headphone jack, a decent DAC and a battery
 for hours of music. What it doesn't need is notifications, feeds and a dozen apps.
 
 Set Wheelhouse as the home app and the phone boots straight into a music player. Press the
-Home button and you are back at the main menu. No accounts, no internet, no ads, no tracking.
+Home button and you are back at the main menu. No accounts, no ads, no tracking, and no
+internet needed: the two optional online extras (album covers and Spool downloads) only send
+what they must.
 
 ## Features
 
 **A real click wheel**
 - Drag around the ring to scroll, with a click sound and haptic tick on every step
+  (Off, Light, Medium or Strong; works even when the system's touch vibration is turned off)
 - Tap **Menu**, **⏮**, **⏭**, **⏯** and the centre button, just like the original
 - Hold **Menu** for the main menu, hold **⏮/⏭** to rewind or fast-forward, hold the centre for options
 - Three wheel speeds; touch scrolling and tapping on the screen also work
@@ -44,6 +47,17 @@ Home button and you are back at the main menu. No accounts, no internet, no ads,
 - Your own playlists: create, add, remove, rename, delete
 - Fast-scroll letter overlay in long lists; long titles scroll on the highlighted row
 
+**Album covers, found for you**
+- Albums without artwork get their cover downloaded from Deezer or iTunes automatically
+- Only the album and artist name are sent; covers are saved on the phone and work offline after
+- *Settings › Album Artwork*: Wi-Fi only, find missing covers now, delete downloaded covers
+
+**Download music with [Spool](https://github.com/pronzzz/spool)**
+- Search YouTube right from the wheel, or share a YouTube link to Wheelhouse
+- Spool runs on your computer and does the downloading and converting; the phone collects
+  the finished, tagged song (with cover) into `Music/Spool`
+- Pair once with a 6-character code; see [Downloading with Spool](#downloading-with-spool)
+
 **Now Playing**
 - Album art with reflection, "3 of 12", elapsed and remaining time
 - Turn the wheel for volume. Press the centre to cycle **Scrub → Shuffle → Repeat**
@@ -53,7 +67,10 @@ Home button and you are back at the main menu. No accounts, no internet, no ads,
 
 **Built to be the only thing on the phone**
 - Works as the **Home app**: the phone starts into Wheelhouse, Home always returns to the main menu
-- Full-screen mode, in-app battery indicator, keep-awake on the charger (a nice dock clock)
+- Full-screen mode, in-app battery indicator, and a Wi-Fi icon that only shows when you are online
+- **Always-On Display**: after a minute without input the screen dims to a black clock with the
+  song that's playing; a touch or button press wakes it
+- **Keep Screen On**: off, on the charger (a nice dock clock) or always
 - **Extras**: Clock, Stopwatch, Sleep Timer (15–90 min or end of song) and an **Apps** list,
   so you can still reach Settings, Bluetooth, the camera or anything else
 - Background playback, lock-screen and notification controls, headphone and Bluetooth buttons,
@@ -67,7 +84,7 @@ Home button and you are back at the main menu. No accounts, no internet, no ads,
 
 **Make it yours**
 - Nine device colours: Silver, Black, Midnight, Red, Blue, Green, Pink, Gold, Rockstar
-- Light or dark screen, backlight level, click sound and haptics on/off
+- Light or dark screen, backlight level, click sound and haptic strength
 
 ## Get started
 
@@ -98,14 +115,36 @@ You can also open any app from **Extras › Apps**.
 In **Now Playing**, press the centre repeatedly to switch what the wheel controls:
 volume → scrub → shuffle → repeat.
 
+## Downloading with Spool
+
+Wheelhouse can download songs from YouTube through [Spool](https://github.com/pronzzz/spool),
+a small app that runs on your Mac, Windows or Linux computer. The computer does the heavy work
+(yt-dlp and ffmpeg); the phone only searches, picks songs and receives the finished files.
+
+1. On the computer, install yt-dlp and ffmpeg (`brew install yt-dlp ffmpeg` on a Mac) and start
+   Spool 2.1 or newer in network mode:
+   ```bash
+   npx https://getspool.vercel.app/spool-2.1.0.tgz --lan
+   ```
+   It prints a **pairing code**. On a Mac, allow incoming connections if macOS asks.
+2. On the phone (same Wi-Fi), open **Spool › Find Spool on Wi-Fi**, pick your computer and spell
+   the code with the wheel. If it isn't found, use **Enter Address…** with the address Spool printed.
+3. **Search YouTube**, pick a song and press the centre. Progress shows in **Spool › Downloads**,
+   and finished songs appear in your library under `Music/Spool`.
+
+You can also share a YouTube or YouTube Music link from any app to **Download with Spool**.
+Choose M4A (best quality, no re-encoding) or MP3 320 in **Spool › Format**. Only download music
+you have the right to keep.
+
 ## Requirements
 
-- Android 5.0 or newer. v1.0 has been tested on Android 16 (phone and a simulated 480×854
+- Android 5.0 or newer. v1.1 has been tested on Android 16 (phone and a simulated 480×854
   budget screen); if it misbehaves on your older phone, please
   [open an issue](https://github.com/pronzzz/Wheelhouse/issues) with the model and Android version.
 - Music stored on the phone: MP3, AAC/M4A, FLAC, Ogg Vorbis, Opus, WAV and anything else your
   phone can play
-- No internet connection or account needed, ever
+- No internet connection or account needed for playback. Album covers and Spool downloads
+  are optional and can be left off
 
 ## Building from source
 
@@ -121,9 +160,10 @@ for release signing, and [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) for how th
 
 ## Privacy
 
-Wheelhouse has no internet permission, so it cannot send anything anywhere. It reads your
-music library, keeps its own small database of playlists and play counts on the phone, and
-that's it.
+Wheelhouse has no analytics, ads or accounts. It reads your music library and keeps its own
+small database of playlists and play counts on the phone. The only network traffic is the
+optional cover lookup (album and artist name to Deezer/iTunes) and talking to your own Spool
+computer on your home network.
 See [PRIVACY.md](PRIVACY.md).
 
 ## Roadmap

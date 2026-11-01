@@ -25,7 +25,7 @@ import java.util.concurrent.Executors
  * Loads album artwork without ever blocking the UI. Callers ask for a bitmap; if it isn't
  * cached yet they get null, and every registered listener is pinged once it arrives.
  */
-class ArtworkLoader(private val context: Context) {
+class ArtworkLoader(private val context: Context, val fetcher: ArtworkFetcher) {
 
     enum class Quality(val px: Int) { THUMB(112), LARGE(480), LITE_LARGE(300) }
 
@@ -35,6 +35,9 @@ class ArtworkLoader(private val context: Context) {
     private val listeners = CopyOnWriteArraySet<() -> Unit>()
     private val main = Handler(Looper.getMainLooper())
     private val scope = CoroutineScope(SupervisorJob() + Executors.newFixedThreadPool(2).asCoroutineDispatcher())
+    /** Online lookups run one at a time so we stay polite to the catalogues. */
+    private val netScope = CoroutineScope(SupervisorJob() + Executors.newSingleThreadExecutor().asCoroutineDispatcher())
+    private val fetching = HashSet<Long>()
     private var notifyQueued = false
 
     init {
@@ -66,9 +69,70 @@ class ArtworkLoader(private val context: Context) {
             if (bmp != null) {
                 cache.put(key, bmp)
                 scheduleNotify()
+            } else if (sample != null) {
+                fetchOnline(albumId, sample)
             }
         }
         return null
+    }
+
+    /** Looks an album without artwork up online in the background, then redraws. */
+    private fun fetchOnline(albumId: Long, sample: Track) {
+        val artist = sample.albumArtist ?: sample.artist
+        if (!fetcher.allowed() || fetcher.recentlyMissed(sample.album, artist)) return
+        synchronized(this) { if (!fetching.add(albumId)) return }
+        netScope.launch {
+            val file = runCatching { fetcher.fetch(sample.album, artist) }.getOrNull()
+            synchronized(this@ArtworkLoader) {
+                fetching -= albumId
+                if (file != null) missing.removeAll { it.startsWith("$albumId@") }
+            }
+            if (file != null) scheduleNotify()
+        }
+    }
+
+    /** Batch progress for "Find Missing Artwork". */
+    data class Batch(val done: Int, val total: Int, val found: Int, val running: Boolean)
+
+    private val _batch = kotlinx.coroutines.flow.MutableStateFlow(Batch(0, 0, 0, running = false))
+    val batch: kotlinx.coroutines.flow.StateFlow<Batch> = _batch
+
+    /** Looks up every album that has no cover, ignoring earlier misses. */
+    fun findMissing(albums: List<Album>) {
+        if (_batch.value.running) return
+        _batch.value = Batch(0, albums.size, 0, running = true)
+        netScope.launch {
+            var found = 0
+            albums.forEachIndexed { i, a ->
+                val sample = a.tracks.firstOrNull()
+                if (sample != null && hasLocalArt(a.albumId, sample) == false) {
+                    // Same name pair as the on-demand lookup, so both find the saved cover.
+                    val artist = sample.albumArtist ?: sample.artist
+                    if (runCatching { fetcher.fetch(sample.album, artist, force = true) }.getOrNull() != null) {
+                        found++
+                        synchronized(this@ArtworkLoader) { missing.removeAll { it.startsWith("${a.albumId}@") } }
+                        scheduleNotify()
+                    }
+                }
+                _batch.value = Batch(i + 1, albums.size, found, running = true)
+                if (!fetcher.allowed()) {
+                    _batch.value = Batch(i + 1, albums.size, found, running = false)
+                    return@launch
+                }
+            }
+            _batch.value = Batch(albums.size, albums.size, found, running = false)
+        }
+    }
+
+    /** True/false once checked; cheap because it only decodes a tiny thumbnail. */
+    private fun hasLocalArt(albumId: Long, sample: Track): Boolean =
+        (fromMediaStore(albumId, 48) ?: fromEmbedded(sample, 48) ?: sample.path?.let { fromFolder(it, 48) }) != null ||
+            fetcher.cached(sample.album, sample.albumArtist ?: sample.artist) != null
+
+    /** Forget earlier "no artwork" results, e.g. when the phone comes online. */
+    fun retryMissing() {
+        synchronized(this) { missing.clear() }
+        scheduleNotify()
     }
 
     fun hasNoArt(albumId: Long, quality: Quality) = synchronized(this) { "$albumId@${quality.px}" in missing }
@@ -93,6 +157,7 @@ class ArtworkLoader(private val context: Context) {
         val raw = fromMediaStore(albumId, px)
             ?: sample?.let { fromEmbedded(it, px) }
             ?: sample?.path?.let { fromFolder(it, px) }
+            ?: sample?.let { fromDownloaded(it, px) }
             ?: return null
         return squareCrop(raw, px)
     }
@@ -140,6 +205,15 @@ class ArtworkLoader(private val context: Context) {
             }
         }
         return null
+    }
+
+    private fun fromDownloaded(track: Track, px: Int): Bitmap? {
+        val f = fetcher.cached(track.album, track.albumArtist ?: track.artist) ?: return null
+        val opts = BitmapFactory.Options().apply { inJustDecodeBounds = true }
+        BitmapFactory.decodeFile(f.path, opts)
+        opts.inSampleSize = sampleSize(opts.outWidth, opts.outHeight, px)
+        opts.inJustDecodeBounds = false
+        return BitmapFactory.decodeFile(f.path, opts)
     }
 
     private fun decodeBytes(data: ByteArray, px: Int): Bitmap? {

@@ -9,12 +9,14 @@ import io.github.pronzzz.wheelhouse.data.ArtworkLoader
 import io.github.pronzzz.wheelhouse.data.Artist
 import io.github.pronzzz.wheelhouse.data.db.Track
 import io.github.pronzzz.wheelhouse.launcher.HomeRole
+import io.github.pronzzz.wheelhouse.ui.device.Haptics
 import io.github.pronzzz.wheelhouse.ui.device.Skins
 import io.github.pronzzz.wheelhouse.ui.screen.ImageSource
 import io.github.pronzzz.wheelhouse.ui.screen.MenuScreen
 import io.github.pronzzz.wheelhouse.ui.screen.Row
 import io.github.pronzzz.wheelhouse.ui.screen.Ui
 import io.github.pronzzz.wheelhouse.util.Text
+import kotlinx.coroutines.launch
 import java.util.Locale
 
 /** Builders for every list screen in the app. */
@@ -333,14 +335,23 @@ object Menus {
                     prefs.backlight = when (prefs.backlight) { -1 -> 25; 25 -> 50; 50 -> 75; 75 -> 100; else -> -1 }
                 }),
                 Row("Clicker", detail = onOff(prefs.clickSound), onSelect = toggle { prefs.clickSound = !prefs.clickSound }),
-                Row("Haptics", detail = onOff(prefs.haptics), onSelect = toggle { prefs.haptics = !prefs.haptics }),
+                Row("Haptics", detail = Haptics.labels[prefs.hapticLevel.coerceIn(0, 3)], onSelect = toggle {
+                    prefs.hapticLevel = (prefs.hapticLevel + 1) % Haptics.labels.size
+                    if (prefs.hapticLevel != Haptics.OFF && !ui.previewHaptics()) ui.flash("No vibration motor")
+                }),
                 Row("Wheel Speed", detail = listOf("Slow", "Normal", "Fast")[prefs.wheelSensitivity.coerceIn(0, 2)],
                     onSelect = toggle { prefs.wheelSensitivity = (prefs.wheelSensitivity + 1) % 3 }),
                 Row("Full Screen", detail = onOff(prefs.immersive), onSelect = toggle { prefs.immersive = !prefs.immersive }),
-                Row("Awake on Charger", detail = onOff(prefs.awakeWhileCharging), onSelect = toggle { prefs.awakeWhileCharging = !prefs.awakeWhileCharging }),
+                Row("Always-On Display", detail = onOff(prefs.alwaysOn), onSelect = toggle {
+                    prefs.alwaysOn = !prefs.alwaysOn
+                    if (prefs.alwaysOn) ui.flash("Dims to a clock after 1 min")
+                }),
+                Row("Keep Screen On", detail = listOf("Off", "On Charger", "Always")[prefs.keepAwake.coerceIn(0, 2)],
+                    onSelect = toggle { prefs.keepAwake = (prefs.keepAwake + 1) % 3 }),
                 Row("Return to Now Playing", detail = onOff(prefs.autoNowPlaying), onSelect = toggle { prefs.autoNowPlaying = !prefs.autoNowPlaying }),
                 Row("Lite Mode", detail = onOff(prefs.liteMode), onSelect = toggle { prefs.liteMode = !prefs.liteMode }),
                 Row("Apps in Extras", detail = onOff(prefs.showApps), onSelect = toggle { prefs.showApps = !prefs.showApps }),
+                Row("Album Artwork", chevron = true, onSelect = { ui.push(artworkSettings(ui)) }),
                 Row("Home Screen", chevron = true, onSelect = { ui.push(homeScreen(ui)) }),
                 Row("Rescan Library", onSelect = {
                     ui.app.artwork.clear()
@@ -358,6 +369,60 @@ object Menus {
                     })
                 }),
             )
+        }
+        return screen
+    }
+
+    /** Online cover lookups for albums without artwork. */
+    fun artworkSettings(ui: Ui): MenuScreen {
+        val prefs = ui.app.prefs
+        val art = ui.app.artwork
+        fun onOff(b: Boolean) = if (b) "On" else "Off"
+        lateinit var screen: MenuScreen
+        fun toggle(action: () -> Unit) = { action(); art.retryMissing(); screen.refresh() }
+        screen = object : MenuScreen(ui, "Album Artwork", build = {
+            val b = art.batch.value
+            val net = ui.app.network.state.value
+            buildList {
+                add(Row("Download Missing Artwork", detail = onOff(prefs.fetchArtwork), onSelect = toggle { prefs.fetchArtwork = !prefs.fetchArtwork }))
+                add(Row("Only on Wi-Fi", detail = onOff(prefs.artworkWifiOnly), onSelect = toggle { prefs.artworkWifiOnly = !prefs.artworkWifiOnly }))
+                add(Row(
+                    if (b.running) "Searching… ${b.done} of ${b.total}" else "Find Missing Artwork Now",
+                    detail = if (b.total > 0) "${b.found} found" else null,
+                    onSelect = {
+                        when {
+                            b.running -> ui.flash("Already Searching")
+                            !prefs.fetchArtwork -> ui.flash("Turn on Download first")
+                            !art.fetcher.allowed() -> ui.flash(if (net.online) "Waiting for Wi-Fi" else "No Internet Connection")
+                            else -> {
+                                art.findMissing(ui.app.library.index.value.albums)
+                                ui.flash("Searching for Covers…")
+                                screen.refresh()
+                            }
+                        }
+                    },
+                ))
+                add(Row("Downloaded Covers", detail = art.fetcher.downloadedCount().toString(), selectable = false))
+                add(Row("Delete Downloaded Covers", onSelect = {
+                    ui.push(confirm(ui, "Delete downloaded covers?", "Delete") {
+                        art.fetcher.clear()
+                        art.clear()
+                        ui.pop()
+                        screen.refresh()
+                        ui.flash("Covers Deleted")
+                    })
+                }))
+                add(Row("Covers come from Deezer and iTunes.", selectable = false))
+                add(Row("Only album and artist names are sent.", selectable = false))
+            }
+        }) {
+            private var job: kotlinx.coroutines.Job? = null
+            override fun onShown() {
+                super.onShown()
+                job?.cancel()
+                job = ui.app.scope.launch { art.batch.collect { refresh() } }
+            }
+            override fun onHidden() { job?.cancel(); job = null }
         }
         return screen
     }

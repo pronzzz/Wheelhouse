@@ -14,7 +14,8 @@ fifteen minutes.
 
 A factory reset gives you the most free space and the best battery life.
 *Settings › System › Reset options › Erase all data*. When setting the phone up again you can
-skip the Google account and Wi-Fi if you like; Wheelhouse doesn't need either.
+skip the Google account if you like; Wheelhouse doesn't need one. Wi-Fi is only needed for the
+optional album-cover downloads and for downloading music with Spool.
 
 ## 2. Install Wheelhouse
 
@@ -59,12 +60,14 @@ These are all optional, but they make a big difference.
 
 | Do this | Where | Why |
 | --- | --- | --- |
-| Turn on **Airplane mode**, then turn Bluetooth back on if you use it | Quick settings | Doubles or triples standby battery life |
+| Turn on **Airplane mode**, then turn Bluetooth back on if you use it (and Wi-Fi when you want covers or Spool) | Quick settings | Doubles or triples standby battery life |
 | Turn off notifications for other apps, or uninstall/disable them | *Settings › Apps* | Nothing else interrupts the music |
 | Set screen timeout to 30 seconds | *Settings › Display* | The screen is only on while you browse |
 | Turn on **Lite Mode** on very slow phones | Wheelhouse *Settings* | Fewer animations, smaller artwork |
 | Choose a **Device Colour** | Wheelhouse *Settings* | Make it yours |
-| Turn **Awake on Charger** on and open *Extras › Clock* | Wheelhouse | A bedside or desk clock while it charges |
+| Set **Keep Screen On** to *On Charger* and open *Extras › Clock* | Wheelhouse *Settings* | A bedside or desk clock while it charges |
+| Turn on **Always-On Display** | Wheelhouse *Settings* | A dim clock and the current song instead of a black screen |
+| Pick a **Haptics** strength | Wheelhouse *Settings* | Stronger ticks on phones with weak vibration motors |
 | Limit charging to ~80% if the phone supports it | *Settings › Battery* | Old batteries last longer |
 
 Need a phone setting, the camera or Bluetooth pairing? **Extras › Apps** opens any installed app.
